@@ -131,6 +131,21 @@ A point estimate is only useful with an honest interval. `run_ci.py` builds a 95
 
 Both intervals are close to their nominal 95% and slightly conservative. The IPW interval is about half as wide, consistent with IPW also having the smallest error.
 
+## Sensitivity to hidden confounding
+
+Every estimate above assumes all confounders are measured. `sensitivity.py` asks how strong an unmeasured one would have to be to change the conclusion, using the omitted-variable-bias framework of Cinelli and Hazlett (2020) on a regression-adjusted estimate.
+
+The **robustness value** is the share of the leftover variation in both the treatment and the outcome that a hidden confounder would need to explain to push the effect to zero. It is compared with the strongest confounder we do observe. Medians over replications:
+
+| Quantity | 10 reps | 100 reps |
+|---|---|---|
+| Robustness value (to reach zero) | 69.2% | **59.9%** |
+| Robustness value (to lose 5% significance) | 67.2% | 57.1% |
+| Strongest observed covariate, partial R2 with the outcome | 23.6% | 32.1% |
+| Strongest observed covariate, partial R2 with the treatment | 2.1% | 2.1% |
+
+A hidden confounder would have to be far stronger than any measured covariate, on both the outcome and the treatment side, to explain the effect away. On this benchmark that is guaranteed by construction (all confounders are observed), so the value of the check is the method: it is the same test one would run on real observational health data.
+
 ## Setup
 
 ```
@@ -140,6 +155,7 @@ python -m venv .venv
 .venv/Scripts/python run.py    # classical estimators, writes results/
 .venv/Scripts/python run_deep.py   # TARNet and DragonNet
 .venv/Scripts/python run_ci.py     # confidence intervals and coverage
+.venv/Scripts/python sensitivity.py # robustness to an unmeasured confounder
 # add --source ihdp100 to any script for the 100-replication release
 ```
 
@@ -221,4 +237,5 @@ Server-side scoring is the `latency_ms` the service reports: converting the rows
 - U. Shalit, F. Johansson, D. Sontag. Estimating individual treatment effect: generalization bounds and algorithms. ICML, 2017.
 - C. Shi, D. Blei, V. Veitch. Adapting neural networks for the estimation of treatment effects. NeurIPS, 2019.
 - V. Chernozhukov et al. Double/debiased machine learning for treatment and structural parameters. Econometrics Journal, 2018.
+- C. Cinelli, C. Hazlett. Making sense of sensitivity: extending omitted variable bias. JRSS-B, 2020.
 - S. Wager, S. Athey. Estimation and inference of heterogeneous treatment effects using random forests. JASA, 2018.
