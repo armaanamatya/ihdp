@@ -112,6 +112,7 @@ def targeting_curve(pred, true, grid):
 def main():
     OUT.mkdir(exist_ok=True)
     grid = np.linspace(0.05, 1.0, 20)
+    true_ates = []
     ate_err = {k: [] for k in ["Naive difference", "IPW", "AIPW (doubly robust)", "Double ML (linear)", "Causal forest"]}
     pehe_te = {k: [] for k in ["Constant effect (AIPW ATE)", "T-learner", "Causal forest"]}
     curves = {"model": [], "oracle": [], "random": []}
@@ -120,6 +121,7 @@ def main():
     for rep in range(1, N_REPS + 1):
         X, t, y, tau = arrays(load(rep))
         ate_true = tau.mean()
+        true_ates.append(float(ate_true))
 
         cf = causal_forest().fit(y, t, X=X)
         ests = {
@@ -156,6 +158,9 @@ def main():
         "config": {"reps": N_REPS, "clip": CLIP, "k_folds": K_FOLDS, "test_size": TEST_SIZE},
         "ate_abs_error": {k: ms(v) for k, v in ate_err.items()},
         "ate_abs_error_per_rep": ate_err,
+        "true_ate_per_rep": true_ates,
+        "ate_rel_error_pct": {k: {"mean": float(np.mean(np.array(v) / true_ates) * 100),
+                                  "max": float(np.max(np.array(v) / true_ates) * 100)} for k, v in ate_err.items()},
         "sqrt_pehe_test": {k: ms(v) for k, v in pehe_te.items()},
         "targeting_curve": {"grid": grid.tolist(), **{k: np.mean(v, axis=0).tolist() for k, v in curves.items()}},
         "refutations_per_rep": refutes,
@@ -164,15 +169,18 @@ def main():
 
     lines = ["# IHDP results (10 replications, mean and standard error)", "",
              "## Absolute error of the average treatment effect (all 747 children)", "",
-             "| Method | Error | SE |", "|---|---|---|"]
-    lines += [f"| {k} | {v['mean']:.3f} | {v['se']:.3f} |" for k, v in results["ate_abs_error"].items()]
+             "| Method | Error | SE | Relative error (mean) | Relative error (max) |", "|---|---|---|---|---|"]
+    lines += [f"| {k} | {v['mean']:.3f} | {v['se']:.3f} | {results['ate_rel_error_pct'][k]['mean']:.1f}% | "
+              f"{results['ate_rel_error_pct'][k]['max']:.1f}% |" for k, v in results["ate_abs_error"].items()]
     lines += ["", "## Root PEHE of per-child effects (held-out 30%)", "", "| Method | sqrt PEHE | SE |", "|---|---|---|"]
     lines += [f"| {k} | {v['mean']:.3f} | {v['se']:.3f} |" for k, v in results["sqrt_pehe_test"].items()]
     tc = results["targeting_curve"]
     i20 = int(np.argmin(np.abs(grid - 0.2)))
     lines += ["", "## Targeting (held-out, scored on true effects)", "",
               f"Mean true effect of the top 20% ranked by the causal forest: {tc['model'][i20]:.3f}",
-              f"Oracle top 20%: {tc['oracle'][i20]:.3f}. Everyone (random targeting): {tc['random'][i20]:.3f}"]
+              f"Oracle top 20%: {tc['oracle'][i20]:.3f}. Everyone (random targeting): {tc['random'][i20]:.3f}",
+              f"Lift over treating everyone: {tc['model'][i20] / tc['random'][i20]:.2f}x, "
+              f"{tc['model'][i20] / tc['oracle'][i20] * 100:.1f}% of the oracle"]
     r = refutes
     lines += ["", "## Refutations of the AIPW estimate (mean over reps)", "",
               f"Estimate {np.mean([x['estimate'] for x in r]):.3f}",
