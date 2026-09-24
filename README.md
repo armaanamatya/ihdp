@@ -6,8 +6,8 @@ It compares statistical and econometric estimators (propensity weighting, doubly
 
 ## Key results
 
-- **Average effect:** inverse propensity weighting (IPW) estimated the program's effect within **2.3%** of the true value on average across 10 replications, and never more than 4.4% off.
-- **Who benefits most:** ranking children by their causal-forest effect estimate and targeting the top 20% gives an average effect **1.9x** that of treating everyone (9.07 vs 4.69), 96% of what a perfect ranking achieves.
+- **Average effect:** inverse propensity weighting (IPW) estimated the program's effect within **2.3%** of the true value on average across 10 replications (never more than 4.4% off), and again 2.3% across 100 replications.
+- **Who benefits most:** ranking children by their causal-forest effect estimate and targeting the top 20% gives an average effect **1.9x** that of treating everyone (9.07 vs 4.69), 96% of what a perfect ranking achieves. Across 100 replications the lift is 2.2x.
 - **Robustness:** shuffling the treatment (a placebo) drops the estimated effect from 4.61 to -0.12, and adding a random confounder or dropping 20% of the data leaves it unchanged.
 - **Per-child effects:** TARNet cut the per-child error 43% against the best classical model (root PEHE 1.25 vs 2.18).
 
@@ -98,6 +98,28 @@ Both neural models cut the held-out per-child error well below the best classica
 
 Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
 
+## 100 replications
+
+The results above use 10 replications. `--source ihdp100` reruns everything on the standard 100-replication release, with the fixed 672/75 train/test split used by Shalit et al. (2017), so per-child errors are directly comparable with published tables. Its first 10 replications are the same children as the 10 above, in a different row order.
+
+| Method | ATE error | Relative error (mean) | sqrt PEHE (75-child test split) | Published sqrt PEHE |
+|---|---|---|---|---|
+| Naive difference | 0.285 | 2.9% | | |
+| IPW | **0.125** | **2.3%** | | |
+| AIPW (doubly robust) | 0.202 | 3.9% | | |
+| Double ML (linear) | 0.774 | 5.9% | | |
+| Causal forest | 0.552 | 4.9% | 3.843 | 3.8 |
+| T-learner | | | 2.077 | |
+| Constant effect | | | 5.712 | |
+| TARNet | 0.217 | | **1.089** | 0.95 |
+| DragonNet | 0.233 | | 1.191 | |
+
+Published values are Shalit et al. (2017), Table 1, out-of-sample, averaged over 1,000 replications with tuned hyperparameters; the models here use fixed hyperparameters. Standard errors are in `results/ihdp100/`.
+
+- IPW stays the most accurate estimate of the average effect.
+- Targeting the top 20% by causal-forest estimate gives 2.16x the average effect of treating everyone, 93% of the oracle.
+- The placebo check drops the AIPW estimate from 4.46 to -0.09; adding a random confounder (4.43) or dropping 20% of the data (4.46) leaves it unchanged.
+
 ## Setup
 
 ```
@@ -106,6 +128,7 @@ python -m venv .venv
 .venv/Scripts/python data.py   # downloads the 10 replications into data/
 .venv/Scripts/python run.py    # classical estimators, writes results/
 .venv/Scripts/python run_deep.py   # TARNet and DragonNet
+# add --source ihdp100 to either script for the 100-replication release
 ```
 
 ## Deployment

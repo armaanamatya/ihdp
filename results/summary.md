@@ -1,4 +1,4 @@
-# IHDP results (10 replications, mean and standard error)
+# IHDP results (cevae10: 10 replications, mean and standard error)
 
 ## Absolute error of the average treatment effect (all 747 children)
 

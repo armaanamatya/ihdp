@@ -1,28 +1,29 @@
 """Score TARNet and DragonNet with the same protocol as run.py.
 
 ATE: fit on all 747 children, average predicted effect, absolute error vs truth.
-PEHE: fit on the same 70% split run.py uses (seed = replication), score the held-out 30%.
-Writes results/deep_results.json and results/deep_summary.md.
+PEHE: fit on the same training split run.py uses, score the held-out rows.
+Usage: python run_deep.py [--source cevae10|ihdp100]
+Writes deep_results.json and deep_summary.md next to run.py's results.
 """
+import argparse
 import json
 from pathlib import Path
 
 import numpy as np
-from sklearn.model_selection import train_test_split
-
-from data import N_REPS, arrays, load
+from data import SOURCES, arrays, load, split_indices
 from deep import predict_cate, train
-from run import TEST_SIZE, pehe
-
-OUT = Path(__file__).parent / "results"
+from run import out_dir, pehe
 
 
-def main():
+def main(source="cevae10"):
+    OUT = out_dir(source)
+    OUT.mkdir(parents=True, exist_ok=True)
     ate_err = {"TARNet": [], "DragonNet": []}
     pehe_te = {"TARNet": [], "DragonNet": []}
-    for rep in range(1, N_REPS + 1):
-        X, t, y, tau = arrays(load(rep))
-        idx_tr, idx_te = train_test_split(np.arange(len(y)), test_size=TEST_SIZE, random_state=rep, stratify=t)
+    for rep in range(1, SOURCES[source] + 1):
+        df = load(rep, source)
+        X, t, y, tau = arrays(df)
+        idx_tr, idx_te = split_indices(df, rep)
         row = []
         for name, dragon in [("TARNet", False), ("DragonNet", True)]:
             full = train(X, t, y, dragon, seed=rep)
@@ -40,7 +41,7 @@ def main():
            "sqrt_pehe_test": {k: ms(v) for k, v in pehe_te.items()},
            "ate_abs_error_per_rep": ate_err, "sqrt_pehe_test_per_rep": pehe_te}
     (OUT / "deep_results.json").write_text(json.dumps(res, indent=2))
-    lines = ["# Deep models (10 replications, mean and standard error)", "", "| Method | ATE error | SE | sqrt PEHE | SE |", "|---|---|---|---|---|"]
+    lines = [f"# Deep models ({source}: {SOURCES[source]} replications, mean and standard error)", "", "| Method | ATE error | SE | sqrt PEHE | SE |", "|---|---|---|---|---|"]
     lines += [f"| {k} | {res['ate_abs_error'][k]['mean']:.3f} | {res['ate_abs_error'][k]['se']:.3f} | "
               f"{res['sqrt_pehe_test'][k]['mean']:.3f} | {res['sqrt_pehe_test'][k]['se']:.3f} |" for k in ate_err]
     print("\n".join(lines))
@@ -48,4 +49,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--source", choices=list(SOURCES), default="cevae10")
+    main(ap.parse_args().source)
