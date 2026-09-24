@@ -16,6 +16,8 @@
 |---|---|---|
 | Constant effect (AIPW ATE) | 5.712 | 0.888 |
 | T-learner | 2.077 | 0.328 |
+| X-learner | 2.868 | 0.466 |
+| DR-learner | 6.262 | 0.698 |
 | Causal forest | 3.843 | 0.621 |
 
 ## Targeting (held-out, scored on true effects)

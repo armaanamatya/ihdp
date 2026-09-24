@@ -15,6 +15,8 @@ from pathlib import Path
 
 import numpy as np
 from econml.dml import CausalForestDML, LinearDML
+from econml.dr import DRLearner
+from econml.metalearners import XLearner
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold
@@ -127,7 +129,7 @@ def main(source="cevae10"):
     grid = np.linspace(0.05, 1.0, 20)
     true_ates = []
     ate_err = {k: [] for k in ["Naive difference", "IPW", "AIPW (doubly robust)", "Double ML (linear)", "Causal forest"]}
-    pehe_te = {k: [] for k in ["Constant effect (AIPW ATE)", "T-learner", "Causal forest"]}
+    pehe_te = {k: [] for k in ["Constant effect (AIPW ATE)", "T-learner", "X-learner", "DR-learner", "Causal forest"]}
     curves = {"model": [], "oracle": [], "random": []}
     refutes = []
 
@@ -155,6 +157,11 @@ def main(source="cevae10"):
         cf_pred = cf_tr.effect(Xte)
         pehe_te["Constant effect (AIPW ATE)"].append(pehe(np.full(len(idx_te), aipw(Xtr, ttr, ytr)), tau_te))
         pehe_te["T-learner"].append(pehe(t_learner(Xtr, ttr, ytr, Xte), tau_te))
+        xl = XLearner(models=outcome_model(), propensity_model=propensity_model()).fit(ytr, ttr, X=Xtr)
+        pehe_te["X-learner"].append(pehe(xl.effect(Xte), tau_te))
+        dr = DRLearner(model_propensity=propensity_model(), model_regression=outcome_model(),
+                       model_final=outcome_model(), cv=K_FOLDS, min_propensity=CLIP, random_state=0).fit(ytr, ttr, X=Xtr)
+        pehe_te["DR-learner"].append(pehe(dr.effect(Xte), tau_te))
         pehe_te["Causal forest"].append(pehe(cf_pred, tau_te))
 
         curves["model"].append(targeting_curve(cf_pred, tau_te, grid))
