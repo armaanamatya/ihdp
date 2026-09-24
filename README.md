@@ -117,6 +117,34 @@ Tests (`tests/`) cover the endpoints, input validation and ONNX to PyTorch parit
 .venv/Scripts/python -m pytest -q
 ```
 
+## Benchmarks
+
+`bench.py` times the served model (146k parameters) on an Intel Core Ultra 7 265K CPU, median of repeated runs after warmup.
+
+**In process: PyTorch eager vs ONNX Runtime**
+
+| Batch | PyTorch p50 (ms) | ONNX Runtime p50 (ms) | Speedup | ONNX rows/s |
+|---|---|---|---|---|
+| 1 | 0.104 | 0.027 | 3.8x | 36,630 |
+| 64 | 0.261 | 0.153 | 1.7x | 418,301 |
+| 1024 | 1.413 | 0.748 | 1.9x | 1,369,533 |
+| 16384 | 7.646 | 8.632 | 0.9x | 1,898,076 |
+
+ONNX Runtime wins where per-call overhead dominates (3.8x for single rows) and loses its edge at very large batches, where both are bound by the same matrix multiplies.
+
+**End to end over HTTP** (local uvicorn, one worker, JSON in and out)
+
+| Batch | p50 (ms) | p99 (ms) | rows/s |
+|---|---|---|---|
+| 1 | 1.00 | 1.57 | 999 |
+| 1024 | 8.53 | 17.39 | 120,094 |
+
+Over HTTP the model is a small share of the cost: at batch 1024 inference takes 0.75 ms of the 8.5 ms, and JSON parsing and validation take most of the rest.
+
+```
+.venv/Scripts/python bench.py --url http://localhost:8000
+```
+
 ## Setup
 
 ```
