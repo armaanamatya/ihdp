@@ -1,241 +1,101 @@
-# Causal effects of an infant health program (IHDP)
+# Causal effects of an infant health program
 
-Did an early-childhood health program help, by how much, and which children benefited most? This repo answers those questions with causal inference on the semi-synthetic Infant Health and Development Program (IHDP) benchmark: real covariates from the program's trial, simulated outcomes, and observational (non-random) treatment. Because the true effects are known, every estimate can be checked.
+Did an early-childhood health program help low-birth-weight infants, by how much, and which children gained the most?
 
-It compares statistical and econometric estimators (propensity weighting, doubly robust AIPW, double machine learning), models how the effect varies from child to child (causal forests, T-learners, TARNet, DragonNet), and stress-tests the estimates with placebo and robustness checks.
+This repo answers those questions with causal inference on **IHDP**, a standard semi-synthetic benchmark built from the Infant Health and Development Program. The children and their backgrounds are real; the outcomes are simulated. Because the true answer is known, every estimate below can be checked against it.
 
-## Key results
-
-- **Average effect:** inverse propensity weighting (IPW) estimated the program's effect within **2.3%** of the true value on average across 10 replications (never more than 4.4% off), and again 2.3% across 100 replications.
-- **Who benefits most:** ranking children by their causal-forest effect estimate and targeting the top 20% gives an average effect **1.9x** that of treating everyone (9.07 vs 4.69), 96% of what a perfect ranking achieves. Across 100 replications the lift is 2.2x.
-- **Robustness:** shuffling the treatment (a placebo) drops the estimated effect from 4.61 to -0.12, and adding a random confounder or dropping 20% of the data leaves it unchanged.
-- **Per-child effects:** TARNet cut the per-child error 43% against the best classical model (root PEHE 1.25 vs 2.18).
-
-## Dataset
-
-IHDP is a **semi-synthetic** benchmark (Hill, 2011). The covariates come from a real randomized trial of an early-childhood health and development intervention for low-birth-weight infants. Hill made it observational by removing a non-random subset of treated children (18.6% treated remain) and simulated the outcomes, so each child's true effect is known.
-
-This repo uses the 10 replications distributed with CEVAE: 747 children, 6 continuous and 19 binary covariates. `data.py` downloads them into `data/` on first run.
-
-## Protocol
-
-Every model choice was fixed before looking at any error against the ground truth, and nothing was tuned afterwards.
-
-- **Average effect (ATE):** fit on all 747 children, report the absolute error against the true ATE.
-- **Per-child effects (CATE):** fit on a 70% split (seed = replication), report root PEHE on the held-out 30%.
-- 10 replications, mean with standard error. The true ATE is about 4 in nine replications and 10.5 in replication 9, whose extreme effect surface dominates most averages.
-
-## Classical estimators
-
-| Estimator | What it does |
+| Question | Answer (100 replications) |
 |---|---|
-| Naive difference | Mean outcome of treated minus untreated. Ignores confounding. |
-| IPW | Normalized inverse-propensity weighting, logistic propensity clipped to [0.01, 0.99]. |
-| AIPW (doubly robust) | Outcome models plus propensity weighting, cross-fitted over 5 folds. |
-| Double ML (linear) | EconML `LinearDML`: residualize outcome and treatment, regress one residual on the other. |
-| Causal forest | EconML `CausalForestDML`: per-child effects from a generalized random forest. |
+| How big is the effect? | Propensity weighting lands within **2.3%** of the true effect on average |
+| How sure are we? | **97 of 100** 95% confidence intervals contain the true effect |
+| Could a hidden factor explain it? | It would need to explain **60%** of the leftover variation; the strongest measured factor explains 32% |
+| Who benefits most? | Targeting the top 20% by predicted benefit gives **2.2x** the average effect |
 
-Outcome models are gradient-boosted trees (sklearn defaults). Per-child effects are also compared with a T-learner and a constant-effect baseline.
+## The data
 
-## Results
+747 children, each described by 25 background measures such as birth weight and the mother's age and education. 139 got the program. The benchmark removes a non-random set of treated children, so the two groups differ before the program starts. Comparing their outcomes directly would mix up the program's effect with those background differences.
 
-**Average effect: error against the true effect**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/overlap-dark.png">
+  <img alt="Distribution of the estimated chance of getting the program, for treated and untreated children" src="figures/overlap.png">
+</picture>
 
-| Method | Error | SE | Relative error (mean) | Relative error (max) |
-|---|---|---|---|---|
-| Naive difference | 0.262 | 0.155 | 3.9% | 15.6% |
-| IPW | **0.123** | 0.042 | **2.3%** | 4.4% |
-| AIPW (doubly robust) | 0.195 | 0.039 | 4.1% | 8.0% |
-| Double ML (linear) | 0.745 | 0.499 | 10.3% | 49.8% |
-| Causal forest | 0.562 | 0.326 | 8.4% | 32.8% |
+## 1. How big is the effect?
 
-Relative error is the absolute error divided by that replication's true effect, averaged over replications.
+Weighting each child by how unusual their group was, given their background (inverse propensity weighting, IPW), removes most of the bias. It beat every heavier method on the average effect, including doubly robust AIPW, double machine learning, causal forests and two neural networks.
 
-**Per-child effects: root PEHE on held-out children**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/average_effect_error-dark.png">
+  <img alt="Average error of each method's effect estimate, as a percent of the true effect" src="figures/average_effect_error.png">
+</picture>
 
-| Method | sqrt PEHE | SE |
-|---|---|---|
-| Constant effect | 4.756 | 2.829 |
-| T-learner | **2.183** | 1.172 |
-| Causal forest | 3.284 | 1.921 |
+## 2. How sure are we?
 
-**Targeting.** Ranking held-out children by the causal forest's predicted effect and treating the top 20% gives a mean true effect of 9.07, against 4.69 for treating everyone (1.93x) and 9.48 for a perfect ranking (95.7% of the oracle). The curve is scored on the known true effects. It is not a Qini curve: treatment in IHDP is not randomized, so an observed-outcome Qini would be biased.
+A 95% interval should contain the true effect about 95 times in 100. The bootstrap intervals for the IPW estimate did 97 times; AIPW's influence-function intervals also covered 97.
 
-![Targeting curve](results/targeting_curve.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/confidence_intervals-dark.png">
+  <img alt="One 95% interval per replication, centered on the true effect; 97 of 100 contain it" src="figures/confidence_intervals.png">
+</picture>
 
-**Refutations of the AIPW estimate** (mean over replications, written by hand in the style of DoWhy's refuters)
+## 3. Could something else explain it?
 
-| Test | Result | Expected |
-|---|---|---|
-| Estimate | 4.611 | |
-| Placebo treatment (shuffled) | -0.120 | near 0 |
-| Random common cause added | 4.629 | unchanged |
-| 80% random subsets | 4.632 | unchanged |
+Two kinds of checks. Shuffling who got the program (a placebo) should make the effect vanish, and it does: 4.46 drops to -0.09. Adding a random extra confounder or dropping 20% of the data should not move it, and they don't.
 
-**Takeaways**
+Then a sensitivity analysis (Cinelli and Hazlett, 2020) asks how strong an unmeasured confounder would have to be to erase the effect: it would need to explain 60% of the leftover variation in both the treatment and the outcome, far more than any measured factor. On this benchmark every confounder is measured by construction, so the point is the method, which carries over to real observational health data.
 
-- Simple weighting (IPW, AIPW) recovered the average effect best. The heavier models did worst on the average, mostly because of replication 9.
-- For per-child effects the T-learner beat the causal forest, and both beat assuming one effect for everyone.
-- Even with an imperfect per-child fit, the causal forest's ranking captured most of the gain from targeting (9.07 of an oracle 9.48).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/robustness-dark.png">
+  <img alt="Placebo and robustness checks, and the strength a hidden confounder would need" src="figures/robustness.png">
+</picture>
 
-Full numbers: `results/summary.md`, `results/results.json`.
+## 4. Who benefits most?
 
-## Deep models
+The effect is not the same for every child. Neural models that share what they learn across the two groups (TARNet, DragonNet) estimate each child's effect best, in line with the published results for this benchmark. The DR-learner does worst: its training targets divide by propensities as small as 0.01, which makes them very noisy with only 139 treated children.
 
-Two neural CATE models in PyTorch, scored with the same protocol:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/per_child_error-dark.png">
+  <img alt="Error of each method's per-child effect estimates, with published results for comparison" src="figures/per_child_error.png">
+</picture>
 
-- **TARNet** (Shalit et al., 2017): a shared representation trunk with one outcome head per arm.
-- **DragonNet** (Shi et al., 2019): TARNet plus a propensity head and targeted regularization.
+Those per-child estimates are useful even when imperfect. Ranking children by the causal forest's estimate and treating the top 20% gives 2.2x the average effect of treating everyone, 93% of what a perfect ranking would get.
 
-Hyperparameters follow the papers and were fixed up front: trunk 3 x 200 ELU, heads 2 x 100 ELU, Adam lr 1e-3, batch 64, L2 1e-4, early stopping on factual validation loss (20% of training rows). The true effects are never used in training or model selection.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="figures/targeting-dark.png">
+  <img alt="Average true effect in the targeted group as more children are included" src="figures/targeting.png">
+</picture>
 
-| Method | ATE error | SE | sqrt PEHE | SE |
-|---|---|---|---|---|
-| TARNet | 0.229 | 0.064 | **1.250** | 0.522 |
-| DragonNet | 0.407 | 0.167 | 1.321 | 0.568 |
+## How it was done
 
-Both neural models cut the held-out per-child error well below the best classical model (T-learner, 2.183), while the simple weighting estimators remain the most accurate for the average effect.
+- **Methods:** naive difference, IPW, AIPW, double ML and causal forests (EconML); T-, X- and DR-learners; TARNet and DragonNet in PyTorch.
+- **No tuning on the answer:** every model choice was fixed before looking at any error against the truth.
+- **Data:** the standard 100-replication release with the published train/test split (Shalit et al., 2017), so per-child errors compare directly with published tables. A 10-replication run gives the same picture (2.3% error, 1.9x targeting lift).
+- **Every number** in this README is in `results/ihdp100/` (100 replications) or `results/` (10), written by the scripts below.
 
-Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
+## Serving the model
 
-## 100 replications
+The per-child model can also score new records: exported to ONNX (matching PyTorch to 2.4e-6), served by FastAPI with a flag for children whose estimates are unreliable because few similar children got the other treatment, and packaged in Docker. ONNX Runtime scores a single child about 4x to 6x faster than PyTorch. Details: `results/bench.md`, `serve/`, `Dockerfile`.
 
-The results above use 10 replications. `--source ihdp100` reruns everything on the standard 100-replication release, with the fixed 672/75 train/test split used by Shalit et al. (2017), so per-child errors are directly comparable with published tables. Its first 10 replications are the same children as the 10 above, in a different row order.
-
-| Method | ATE error | Relative error (mean) | sqrt PEHE (75-child test split) | Published sqrt PEHE |
-|---|---|---|---|---|
-| Naive difference | 0.285 | 2.9% | | |
-| IPW | **0.125** | **2.3%** | | |
-| AIPW (doubly robust) | 0.202 | 3.9% | | |
-| Double ML (linear) | 0.774 | 5.9% | | |
-| Causal forest | 0.552 | 4.9% | 3.843 | 3.8 |
-| T-learner | | | 2.077 | |
-| Constant effect | | | 5.712 | |
-| TARNet | 0.217 | | **1.089** | 0.95 |
-| DragonNet | 0.233 | | 1.191 | |
-
-Published values are Shalit et al. (2017), Table 1, out-of-sample, averaged over 1,000 replications with tuned hyperparameters; the models here use fixed hyperparameters. Standard errors are in `results/ihdp100/`.
-
-- IPW stays the most accurate estimate of the average effect.
-- Targeting the top 20% by causal-forest estimate gives 2.16x the average effect of treating everyone, 93% of the oracle.
-- The placebo check drops the AIPW estimate from 4.46 to -0.09; adding a random confounder (4.43) or dropping 20% of the data (4.46) leaves it unchanged.
-
-## Uncertainty
-
-A point estimate is only useful with an honest interval. `run_ci.py` builds a 95% interval for the average effect in every replication and checks how often it contains the true effect (a well-calibrated 95% interval should miss about 5% of the time).
-
-| Method | Interval | Coverage, 10 reps | Coverage, 100 reps | Median width (100 reps) |
-|---|---|---|---|---|
-| IPW | bootstrap percentile, 200 resamples refitting the propensity model | 100% | **97%** | 0.60 |
-| AIPW | influence function (standard error of the cross-fitted scores) | 100% | **97%** | 1.08 |
-
-Both intervals are close to their nominal 95% and slightly conservative. The IPW interval is about half as wide, consistent with IPW also having the smallest error.
-
-## Sensitivity to hidden confounding
-
-Every estimate above assumes all confounders are measured. `sensitivity.py` asks how strong an unmeasured one would have to be to change the conclusion, using the omitted-variable-bias framework of Cinelli and Hazlett (2020) on a regression-adjusted estimate.
-
-The **robustness value** is the share of the leftover variation in both the treatment and the outcome that a hidden confounder would need to explain to push the effect to zero. It is compared with the strongest confounder we do observe. Medians over replications:
-
-| Quantity | 10 reps | 100 reps |
-|---|---|---|
-| Robustness value (to reach zero) | 69.2% | **59.9%** |
-| Robustness value (to lose 5% significance) | 67.2% | 57.1% |
-| Strongest observed covariate, partial R2 with the outcome | 23.6% | 32.1% |
-| Strongest observed covariate, partial R2 with the treatment | 2.1% | 2.1% |
-
-A hidden confounder would have to be far stronger than any measured covariate, on both the outcome and the treatment side, to explain the effect away. On this benchmark that is guaranteed by construction (all confounders are observed), so the value of the check is the method: it is the same test one would run on real observational health data.
-
-## Setup
+## Run it
 
 ```
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
-.venv/Scripts/python data.py   # downloads the 10 replications into data/
-.venv/Scripts/python run.py    # classical estimators, writes results/
-.venv/Scripts/python run_deep.py   # TARNet and DragonNet
-.venv/Scripts/python run_ci.py     # confidence intervals and coverage
-.venv/Scripts/python sensitivity.py # robustness to an unmeasured confounder
-# add --source ihdp100 to any script for the 100-replication release
+.venv/Scripts/python run.py --source ihdp100          # classical estimators, targeting, placebo checks
+.venv/Scripts/python run_deep.py --source ihdp100     # TARNet and DragonNet
+.venv/Scripts/python run_ci.py --source ihdp100       # confidence intervals and coverage
+.venv/Scripts/python sensitivity.py --source ihdp100  # hidden-confounder sensitivity
+.venv/Scripts/python make_figures.py                  # the figures above
 ```
 
-## Deployment
-
-The per-child effect model can also be served for scoring new records. This part is engineering around the analysis above, not part of it.
-
-### Serving
-
-`export.py` trains the serving model and exports it to ONNX with the covariate normalization baked into the graph, so the service takes unnormalized features: x1..x6 as they are, x7..x25 as 0/1. Note that the CEVAE CSV codes x14 as 1/2, so subtract 1 before sending it (this is also in `/metadata`). The export fails unless ONNX Runtime matches PyTorch to within 1e-4 (measured: 2.4e-6).
-
-The service uses DragonNet rather than TARNet. Its propensity head lets the API flag inputs with poor overlap, where any effect estimate is unreliable. TARNet scored slightly better on PEHE, but PEHE needs ground truth that a production system never has, so it is not a selection rule.
-
-`serve/app.py` is a FastAPI service on ONNX Runtime:
-
-| Endpoint | |
-|---|---|
-| `GET /health` | Liveness and model version |
-| `GET /metadata` | Feature order, model hash, parity check |
-| `POST /score` | Up to 50,000 rows of 25 features. Returns the predicted effect, propensity, a treat/don't-treat flag at a chosen threshold, and a low-overlap flag (propensity outside [0.05, 0.95]) |
-
-```
-curl -X POST localhost:8000/score -H "Content-Type: application/json" \
-  -d '{"rows": [[-0.53,-0.34,1.13,0.16,-0.32,1.3,1,0,1,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0]], "threshold": 4.0}'
-```
-
-Tests (`tests/`) cover the endpoints, input validation and ONNX to PyTorch parity.
-
-```
-.venv/Scripts/python -m pip install -r requirements-dev.txt
-.venv/Scripts/python export.py                              # writes artifacts/
-.venv/Scripts/python -m uvicorn serve.app:app --port 8000
-.venv/Scripts/python -m pytest -q
-```
-
-### Docker
-
-The image holds only the service: ONNX Runtime, FastAPI and the exported model, with no PyTorch or training code (463 MB, runs as a non-root user).
-
-```
-docker build -t ihdp-cate .
-docker run -p 8000:8000 ihdp-cate
-```
-
-### Serving benchmarks
-
-`bench.py` times the served model (146k parameters) on an Intel Core Ultra 7 265K CPU, median of repeated runs after warmup.
-
-**In process: PyTorch eager vs ONNX Runtime**
-
-| Batch | PyTorch p50 (ms) | ONNX Runtime p50 (ms) | Speedup | ONNX rows/s |
-|---|---|---|---|---|
-| 1 | 0.143 | 0.023 | 6.3x | 43,668 |
-| 64 | 0.328 | 0.150 | 2.2x | 427,807 |
-| 1024 | 1.285 | 0.718 | 1.8x | 1,426,979 |
-| 16384 | 11.485 | 9.506 | 1.2x | 1,723,534 |
-
-ONNX Runtime wins most where per-call overhead dominates and the gap closes at very large batches, where both are bound by the same matrix multiplies. Timings on a desktop CPU vary between runs: an earlier run measured 3.8x at batch 1 and 0.9x at batch 16384, so treat the single-row speedup as roughly 4x to 6x.
-
-**End to end over HTTP** (local uvicorn, one worker, one client sending requests one after another, so rows/s is client loop speed, not server capacity)
-
-| Batch | Round trip p50 (ms) | p99 (ms) | Server-side scoring p50 (ms) | rows/s |
-|---|---|---|---|---|
-| 1 | 1.08 | 2.57 | 0.08 | 922 |
-| 1024 | 9.44 | 22.24 | 1.60 | 108,429 |
-
-The same benchmark against the Docker container (Docker Desktop on Windows) measured a 1.45 ms round trip at batch 1 and 15.8 ms at batch 1024, with server-side scoring unchanged (0.07 ms and 1.3 ms). The extra time is most likely Docker Desktop's port forwarding; it was not broken down further.
-
-Server-side scoring is the `latency_ms` the service reports: converting the rows to an array, running the model and converting the outputs back to lists. At batch 1024 that is 1.6 ms of a 9.4 ms round trip. The rest is request validation, JSON encoding on both ends and transport, not broken down further.
-
-```
-.venv/Scripts/python bench.py --url http://localhost:8000
-```
+Drop `--source ihdp100` for the 10-replication run. For the scoring service: `pip install -r requirements-dev.txt`, `python export.py`, `uvicorn serve.app:app`, or `docker build -t ihdp-cate .`.
 
 ## References
 
 - J. L. Hill. Bayesian nonparametric modeling for causal inference. JCGS, 2011.
-- C. Louizos et al. Causal effect inference with deep latent-variable models (CEVAE). NeurIPS, 2017.
 - U. Shalit, F. Johansson, D. Sontag. Estimating individual treatment effect: generalization bounds and algorithms. ICML, 2017.
 - C. Shi, D. Blei, V. Veitch. Adapting neural networks for the estimation of treatment effects. NeurIPS, 2019.
 - V. Chernozhukov et al. Double/debiased machine learning for treatment and structural parameters. Econometrics Journal, 2018.
-- C. Cinelli, C. Hazlett. Making sense of sensitivity: extending omitted variable bias. JRSS-B, 2020.
 - S. Wager, S. Athey. Estimation and inference of heterogeneous treatment effects using random forests. JASA, 2018.
+- C. Cinelli, C. Hazlett. Making sense of sensitivity: extending omitted variable bias. JRSS-B, 2020.
+- C. Louizos et al. Causal effect inference with deep latent-variable models (CEVAE). NeurIPS, 2017.
