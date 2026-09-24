@@ -71,18 +71,39 @@ Outcome models are gradient-boosted trees (sklearn defaults). Per-child effects 
 
 Full numbers: `results/summary.md`, `results/results.json`.
 
+## Deep models
+
+Two neural CATE models in PyTorch, scored with the same protocol:
+
+- **TARNet** (Shalit et al., 2017): a shared representation trunk with one outcome head per arm.
+- **DragonNet** (Shi et al., 2019): TARNet plus a propensity head and targeted regularization.
+
+Hyperparameters follow the papers and were fixed up front: trunk 3 x 200 ELU, heads 2 x 100 ELU, Adam lr 1e-3, batch 64, L2 1e-4, early stopping on factual validation loss (20% of training rows). The true effects are never used in training or model selection.
+
+| Method | ATE error | SE | sqrt PEHE | SE |
+|---|---|---|---|---|
+| TARNet | 0.229 | 0.064 | **1.250** | 0.522 |
+| DragonNet | 0.407 | 0.167 | 1.321 | 0.568 |
+
+Both neural models cut the held-out per-child error well below the best classical model (T-learner, 2.183), while the simple weighting estimators remain the most accurate for the average effect.
+
+Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
+
 ## Setup
 
 ```
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt
+.venv/Scripts/python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 .venv/Scripts/python data.py   # downloads the 10 replications into data/
 .venv/Scripts/python run.py    # classical estimators, writes results/
+.venv/Scripts/python run_deep.py   # TARNet and DragonNet
 ```
 
 ## References
 
 - J. L. Hill. Bayesian nonparametric modeling for causal inference. JCGS, 2011.
 - C. Louizos et al. Causal effect inference with deep latent-variable models (CEVAE). NeurIPS, 2017.
+- U. Shalit, F. Johansson, D. Sontag. Estimating individual treatment effect: generalization bounds and algorithms. ICML, 2017.
+- C. Shi, D. Blei, V. Veitch. Adapting neural networks for the estimation of treatment effects. NeurIPS, 2019.
 - V. Chernozhukov et al. Double/debiased machine learning for treatment and structural parameters. Econometrics Journal, 2018.
 - S. Wager, S. Athey. Estimation and inference of heterogeneous treatment effects using random forests. JASA, 2018.
