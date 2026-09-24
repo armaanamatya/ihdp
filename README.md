@@ -91,7 +91,7 @@ Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
 
 ## Serving
 
-`export.py` trains the serving model and exports it to ONNX with the covariate normalization baked into the graph, so the service takes raw features. The export fails unless ONNX Runtime matches PyTorch to within 1e-4 (measured: 2.4e-6).
+`export.py` trains the serving model and exports it to ONNX with the covariate normalization baked into the graph, so the service takes unnormalized features: x1..x6 as they are, x7..x25 as 0/1. Note that the CEVAE CSV codes x14 as 1/2, so subtract 1 before sending it (this is also in `/metadata`). The export fails unless ONNX Runtime matches PyTorch to within 1e-4 (measured: 2.4e-6).
 
 The service uses DragonNet rather than TARNet. Its propensity head lets the API flag inputs with poor overlap, where any effect estimate is unreliable. TARNet scored slightly better on PEHE, but PEHE needs ground truth that a production system never has, so it is not a selection rule.
 
@@ -125,21 +125,21 @@ Tests (`tests/`) cover the endpoints, input validation and ONNX to PyTorch parit
 
 | Batch | PyTorch p50 (ms) | ONNX Runtime p50 (ms) | Speedup | ONNX rows/s |
 |---|---|---|---|---|
-| 1 | 0.104 | 0.027 | 3.8x | 36,630 |
-| 64 | 0.261 | 0.153 | 1.7x | 418,301 |
-| 1024 | 1.413 | 0.748 | 1.9x | 1,369,533 |
-| 16384 | 7.646 | 8.632 | 0.9x | 1,898,076 |
+| 1 | 0.143 | 0.023 | 6.3x | 43,668 |
+| 64 | 0.328 | 0.150 | 2.2x | 427,807 |
+| 1024 | 1.285 | 0.718 | 1.8x | 1,426,979 |
+| 16384 | 11.485 | 9.506 | 1.2x | 1,723,534 |
 
-ONNX Runtime wins where per-call overhead dominates (3.8x for single rows) and loses its edge at very large batches, where both are bound by the same matrix multiplies.
+ONNX Runtime wins most where per-call overhead dominates and the gap closes at very large batches, where both are bound by the same matrix multiplies. Timings on a desktop CPU vary between runs: an earlier run measured 3.8x at batch 1 and 0.9x at batch 16384, so treat the single-row speedup as roughly 4x to 6x.
 
-**End to end over HTTP** (local uvicorn, one worker, JSON in and out)
+**End to end over HTTP** (local uvicorn, one worker, one client sending requests one after another, so rows/s is client loop speed, not server capacity)
 
-| Batch | p50 (ms) | p99 (ms) | rows/s |
-|---|---|---|---|
-| 1 | 1.00 | 1.57 | 999 |
-| 1024 | 8.53 | 17.39 | 120,094 |
+| Batch | Round trip p50 (ms) | p99 (ms) | Server-side scoring p50 (ms) | rows/s |
+|---|---|---|---|---|
+| 1 | 1.08 | 2.57 | 0.08 | 922 |
+| 1024 | 9.44 | 22.24 | 1.60 | 108,429 |
 
-Over HTTP the model is a small share of the cost: at batch 1024 inference takes 0.75 ms of the 8.5 ms, and JSON parsing and validation take most of the rest.
+Server-side scoring is the `latency_ms` the service reports: converting the rows to an array, running the model and converting the outputs back to lists. At batch 1024 that is 1.6 ms of a 9.4 ms round trip. The rest is request validation, JSON encoding on both ends and transport, not broken down further.
 
 ```
 .venv/Scripts/python bench.py --url http://localhost:8000

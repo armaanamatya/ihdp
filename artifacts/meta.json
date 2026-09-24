@@ -31,6 +31,7 @@
     "cate",
     "propensity"
   ],
+  "feature_notes": "x1..x6 continuous, unnormalized (the model normalizes them). x7..x25 binary 0/1; x14 is 1/2 in the CEVAE CSV and must be sent as 0/1 (value - 1).",
   "trained_on": "IHDP replication 1, all 747 rows",
   "parity_max_abs_diff": 2.384185791015625e-06,
   "sha256": "d08dc8a5064f207c7609c16c5aee1a5f44fb199a95126e89dd1e2e334c65de2d",

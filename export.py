@@ -39,6 +39,8 @@ def main():
     assert diff < 1e-4, diff
 
     meta = {"version": VERSION, "features": FEATURES, "outputs": ["cate", "propensity"],
+            "feature_notes": "x1..x6 continuous, unnormalized (the model normalizes them). x7..x25 binary 0/1; "
+                             "x14 is 1/2 in the CEVAE CSV and must be sent as 0/1 (value - 1).",
             "trained_on": "IHDP replication 1, all 747 rows", "parity_max_abs_diff": diff,
             "sha256": hashlib.sha256(onnx_path.read_bytes()).hexdigest(),
             "params": sum(p.numel() for p in model.parameters())}
