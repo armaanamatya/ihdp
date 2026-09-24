@@ -1,0 +1,38 @@
+{
+  "version": "dragonnet-ihdp-rep1-v1",
+  "features": [
+    "x1",
+    "x2",
+    "x3",
+    "x4",
+    "x5",
+    "x6",
+    "x7",
+    "x8",
+    "x9",
+    "x10",
+    "x11",
+    "x12",
+    "x13",
+    "x14",
+    "x15",
+    "x16",
+    "x17",
+    "x18",
+    "x19",
+    "x20",
+    "x21",
+    "x22",
+    "x23",
+    "x24",
+    "x25"
+  ],
+  "outputs": [
+    "cate",
+    "propensity"
+  ],
+  "trained_on": "IHDP replication 1, all 747 rows",
+  "parity_max_abs_diff": 2.384185791015625e-06,
+  "sha256": "d08dc8a5064f207c7609c16c5aee1a5f44fb199a95126e89dd1e2e334c65de2d",
+  "params": 146404
+}
