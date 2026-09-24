@@ -1,0 +1,7 @@
+.venv
+data
+results
+tests
+__pycache__
+.git
+artifacts/dragonnet.pt
