@@ -148,7 +148,7 @@ ONNX Runtime wins most where per-call overhead dominates and the gap closes at v
 | 1 | 1.08 | 2.57 | 0.08 | 922 |
 | 1024 | 9.44 | 22.24 | 1.60 | 108,429 |
 
-The same benchmark against the Docker container (Docker Desktop on Windows) measured a 1.45 ms round trip at batch 1 and 15.8 ms at batch 1024, with server-side scoring unchanged (0.07 ms and 1.3 ms). The extra time is the container's network layer.
+The same benchmark against the Docker container (Docker Desktop on Windows) measured a 1.45 ms round trip at batch 1 and 15.8 ms at batch 1024, with server-side scoring unchanged (0.07 ms and 1.3 ms). The extra time is most likely Docker Desktop's port forwarding; it was not broken down further.
 
 Server-side scoring is the `latency_ms` the service reports: converting the rows to an array, running the model and converting the outputs back to lists. At batch 1024 that is 1.6 ms of a 9.4 ms round trip. The rest is request validation, JSON encoding on both ends and transport, not broken down further.
 
