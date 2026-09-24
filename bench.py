@@ -62,8 +62,16 @@ def http(url):
     with httpx.Client(base_url=url, timeout=60) as c:
         for b, reps in [(1, 300), (1024, 50)]:
             payload = {"rows": rng.normal(size=(b, 25)).round(4).tolist()}
-            res = timeit(lambda: c.post("/score", json=payload).raise_for_status(), reps)
-            rows.append({"batch": b, **res, "rows_per_s": b / res["p50_ms"] * 1000})
+            server = []
+
+            def call():
+                r = c.post("/score", json=payload)
+                r.raise_for_status()
+                server.append(r.json()["latency_ms"])
+
+            res = timeit(call, reps)
+            rows.append({"batch": b, **res, "server_p50_ms": statistics.median(server[5:]),
+                         "rows_per_s": b / res["p50_ms"] * 1000})
     return rows
 
 
@@ -84,8 +92,10 @@ def main():
     lines += [f"| {r['batch']} | {r['pytorch']['p50_ms']:.3f} | {r['onnxruntime']['p50_ms']:.3f} | "
               f"{r['speedup_p50']:.1f}x | {r['onnxruntime_rows_per_s']:,.0f} |" for r in res["in_process"]]
     if "http" in res:
-        lines += ["", "End to end over HTTP", "", "| Batch | p50 (ms) | p99 (ms) | rows/s |", "|---|---|---|---|"]
-        lines += [f"| {r['batch']} | {r['p50_ms']:.2f} | {r['p99_ms']:.2f} | {r['rows_per_s']:,.0f} |" for r in res["http"]]
+        lines += ["", "End to end over HTTP (one client, sequential requests)", "",
+                  "| Batch | Round trip p50 (ms) | p99 (ms) | Server-side scoring p50 (ms) | rows/s |", "|---|---|---|---|---|"]
+        lines += [f"| {r['batch']} | {r['p50_ms']:.2f} | {r['p99_ms']:.2f} | {r['server_p50_ms']:.2f} | {r['rows_per_s']:,.0f} |"
+                  for r in res["http"]]
     (OUT / "bench.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
