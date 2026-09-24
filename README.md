@@ -1,8 +1,15 @@
-# IHDP: causal effect estimation, from benchmark to production
+# Causal effects of an infant health program (IHDP)
 
-How well do causal inference methods recover a treatment effect from observational data, when the true answer is known? And what does it take to serve per-person effect estimates in production?
+Did an early-childhood health program help, by how much, and which children benefited most? This repo answers those questions with causal inference on the semi-synthetic Infant Health and Development Program (IHDP) benchmark: real covariates from the program's trial, simulated outcomes, and observational (non-random) treatment. Because the true effects are known, every estimate can be checked.
 
-This repo compares classical and deep causal estimators on the IHDP benchmark, then exports the served model to ONNX behind a FastAPI scoring service.
+It compares statistical and econometric estimators (propensity weighting, doubly robust AIPW, double machine learning), models how the effect varies from child to child (causal forests, T-learners, TARNet, DragonNet), and stress-tests the estimates with placebo and robustness checks.
+
+## Key results
+
+- **Average effect:** inverse propensity weighting (IPW) estimated the program's effect within **2.3%** of the true value on average across 10 replications, and never more than 4.4% off.
+- **Who benefits most:** ranking children by their causal-forest effect estimate and targeting the top 20% gives an average effect **1.9x** that of treating everyone (9.07 vs 4.69), 96% of what a perfect ranking achieves.
+- **Robustness:** shuffling the treatment (a placebo) drops the estimated effect from 4.61 to -0.12, and adding a random confounder or dropping 20% of the data leaves it unchanged.
+- **Per-child effects:** TARNet cut the per-child error 43% against the best classical model (root PEHE 1.25 vs 2.18).
 
 ## Dataset
 
@@ -32,15 +39,17 @@ Outcome models are gradient-boosted trees (sklearn defaults). Per-child effects 
 
 ## Results
 
-**Average effect: absolute error**
+**Average effect: error against the true effect**
 
-| Method | Error | SE |
-|---|---|---|
-| Naive difference | 0.262 | 0.155 |
-| IPW | **0.123** | 0.042 |
-| AIPW (doubly robust) | 0.195 | 0.039 |
-| Double ML (linear) | 0.745 | 0.499 |
-| Causal forest | 0.562 | 0.326 |
+| Method | Error | SE | Relative error (mean) | Relative error (max) |
+|---|---|---|---|---|
+| Naive difference | 0.262 | 0.155 | 3.9% | 15.6% |
+| IPW | **0.123** | 0.042 | **2.3%** | 4.4% |
+| AIPW (doubly robust) | 0.195 | 0.039 | 4.1% | 8.0% |
+| Double ML (linear) | 0.745 | 0.499 | 10.3% | 49.8% |
+| Causal forest | 0.562 | 0.326 | 8.4% | 32.8% |
+
+Relative error is the absolute error divided by that replication's true effect, averaged over replications.
 
 **Per-child effects: root PEHE on held-out children**
 
@@ -50,7 +59,7 @@ Outcome models are gradient-boosted trees (sklearn defaults). Per-child effects 
 | T-learner | **2.183** | 1.172 |
 | Causal forest | 3.284 | 1.921 |
 
-**Targeting.** Ranking held-out children by the causal forest's predicted effect and treating the top 20% gives a mean true effect of 9.07, against 4.69 for treating everyone and 9.48 for a perfect ranking. The curve is scored on the known true effects. It is not a Qini curve: treatment in IHDP is not randomized, so an observed-outcome Qini would be biased.
+**Targeting.** Ranking held-out children by the causal forest's predicted effect and treating the top 20% gives a mean true effect of 9.07, against 4.69 for treating everyone (1.93x) and 9.48 for a perfect ranking (95.7% of the oracle). The curve is scored on the known true effects. It is not a Qini curve: treatment in IHDP is not randomized, so an observed-outcome Qini would be biased.
 
 ![Targeting curve](results/targeting_curve.png)
 
@@ -89,7 +98,21 @@ Both neural models cut the held-out per-child error well below the best classica
 
 Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
 
-## Serving
+## Setup
+
+```
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+.venv/Scripts/python data.py   # downloads the 10 replications into data/
+.venv/Scripts/python run.py    # classical estimators, writes results/
+.venv/Scripts/python run_deep.py   # TARNet and DragonNet
+```
+
+## Deployment
+
+The per-child effect model can also be served for scoring new records. This part is engineering around the analysis above, not part of it.
+
+### Serving
 
 `export.py` trains the serving model and exports it to ONNX with the covariate normalization baked into the graph, so the service takes unnormalized features: x1..x6 as they are, x7..x25 as 0/1. Note that the CEVAE CSV codes x14 as 1/2, so subtract 1 before sending it (this is also in `/metadata`). The export fails unless ONNX Runtime matches PyTorch to within 1e-4 (measured: 2.4e-6).
 
@@ -126,7 +149,7 @@ docker build -t ihdp-cate .
 docker run -p 8000:8000 ihdp-cate
 ```
 
-## Benchmarks
+### Serving benchmarks
 
 `bench.py` times the served model (146k parameters) on an Intel Core Ultra 7 265K CPU, median of repeated runs after warmup.
 
@@ -154,16 +177,6 @@ Server-side scoring is the `latency_ms` the service reports: converting the rows
 
 ```
 .venv/Scripts/python bench.py --url http://localhost:8000
-```
-
-## Setup
-
-```
-python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
-.venv/Scripts/python data.py   # downloads the 10 replications into data/
-.venv/Scripts/python run.py    # classical estimators, writes results/
-.venv/Scripts/python run_deep.py   # TARNet and DragonNet
 ```
 
 ## References
