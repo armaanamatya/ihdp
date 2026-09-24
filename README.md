@@ -120,6 +120,17 @@ Published values are Shalit et al. (2017), Table 1, out-of-sample, averaged over
 - Targeting the top 20% by causal-forest estimate gives 2.16x the average effect of treating everyone, 93% of the oracle.
 - The placebo check drops the AIPW estimate from 4.46 to -0.09; adding a random confounder (4.43) or dropping 20% of the data (4.46) leaves it unchanged.
 
+## Uncertainty
+
+A point estimate is only useful with an honest interval. `run_ci.py` builds a 95% interval for the average effect in every replication and checks how often it contains the true effect (a well-calibrated 95% interval should miss about 5% of the time).
+
+| Method | Interval | Coverage, 10 reps | Coverage, 100 reps | Median width (100 reps) |
+|---|---|---|---|---|
+| IPW | bootstrap percentile, 200 resamples refitting the propensity model | 100% | **97%** | 0.60 |
+| AIPW | influence function (standard error of the cross-fitted scores) | 100% | **97%** | 1.08 |
+
+Both intervals are close to their nominal 95% and slightly conservative. The IPW interval is about half as wide, consistent with IPW also having the smallest error.
+
 ## Setup
 
 ```
@@ -128,7 +139,8 @@ python -m venv .venv
 .venv/Scripts/python data.py   # downloads the 10 replications into data/
 .venv/Scripts/python run.py    # classical estimators, writes results/
 .venv/Scripts/python run_deep.py   # TARNet and DragonNet
-# add --source ihdp100 to either script for the 100-replication release
+.venv/Scripts/python run_ci.py     # confidence intervals and coverage
+# add --source ihdp100 to any script for the 100-replication release
 ```
 
 ## Deployment
