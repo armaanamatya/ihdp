@@ -60,6 +60,11 @@ def ipw(X, t, y):
 
 def aipw(X, t, y, seed=0):
     """Doubly robust AIPW with cross-fitted propensity and outcome models."""
+    return aipw_scores(X, t, y, seed).mean()
+
+
+def aipw_scores(X, t, y, seed=0):
+    """Per-row AIPW scores; their mean is the estimate and their spread gives its standard error."""
     psi = np.zeros(len(y))
     for tr, te in KFold(K_FOLDS, shuffle=True, random_state=seed).split(X):
         e = np.clip(propensity_model().fit(X[tr], t[tr]).predict_proba(X[te])[:, 1], CLIP, 1 - CLIP)
@@ -67,7 +72,7 @@ def aipw(X, t, y, seed=0):
         m0 = outcome_model().fit(X[tr][t[tr] == 0], y[tr][t[tr] == 0]).predict(X[te])
         tt, yy = t[te], y[te]
         psi[te] = m1 - m0 + tt * (yy - m1) / e - (1 - tt) * (yy - m0) / (1 - e)
-    return psi.mean()
+    return psi
 
 
 def linear_dml():
