@@ -1,4 +1,4 @@
-# Deep models (10 replications, mean and standard error)
+# Deep models (cevae10: 10 replications, mean and standard error)
 
 | Method | ATE error | SE | sqrt PEHE | SE |
 |---|---|---|---|---|

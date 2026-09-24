@@ -3,10 +3,13 @@
 Every model choice below was fixed before any error against ground truth was looked at:
   propensity  logistic regression on standardized covariates, clipped to [CLIP, 1 - CLIP]
   outcome     gradient-boosted trees (sklearn defaults), cross-fitted over K_FOLDS folds
-  split       70/30 train/test per replication, seed = replication number
+  split       70/30 train/test per replication, seed = replication number (cevae10), or the
+              published 672/75 split (ihdp100)
 
-Outputs: results/results.json, results/summary.md, results/targeting_curve.png
+Usage: python run.py [--source cevae10|ihdp100]
+Outputs: results/ (cevae10) or results/ihdp100/: results.json, summary.md, targeting_curve.png
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -14,16 +17,19 @@ import numpy as np
 from econml.dml import CausalForestDML, LinearDML
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import KFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from data import N_REPS, arrays, load
+from data import SOURCES, arrays, load, split_indices
 
 CLIP = 0.01
 K_FOLDS = 5
-TEST_SIZE = 0.3
-OUT = Path(__file__).parent / "results"
+RESULTS = Path(__file__).parent / "results"
+
+
+def out_dir(source):
+    return RESULTS if source == "cevae10" else RESULTS / source
 
 
 def propensity_model():
@@ -109,8 +115,10 @@ def targeting_curve(pred, true, grid):
     return [float(true[order[: max(1, int(round(q * len(true))))]].mean()) for q in grid]
 
 
-def main():
-    OUT.mkdir(exist_ok=True)
+def main(source="cevae10"):
+    OUT = out_dir(source)
+    OUT.mkdir(parents=True, exist_ok=True)
+    n_reps = SOURCES[source]
     grid = np.linspace(0.05, 1.0, 20)
     true_ates = []
     ate_err = {k: [] for k in ["Naive difference", "IPW", "AIPW (doubly robust)", "Double ML (linear)", "Causal forest"]}
@@ -118,8 +126,9 @@ def main():
     curves = {"model": [], "oracle": [], "random": []}
     refutes = []
 
-    for rep in range(1, N_REPS + 1):
-        X, t, y, tau = arrays(load(rep))
+    for rep in range(1, n_reps + 1):
+        df = load(rep, source)
+        X, t, y, tau = arrays(df)
         ate_true = tau.mean()
         true_ates.append(float(ate_true))
 
@@ -134,7 +143,7 @@ def main():
         for k, v in ests.items():
             ate_err[k].append(abs(v - ate_true))
 
-        idx_tr, idx_te = train_test_split(np.arange(len(y)), test_size=TEST_SIZE, random_state=rep, stratify=t)
+        idx_tr, idx_te = split_indices(df, rep)
         Xtr, ttr, ytr = X[idx_tr], t[idx_tr], y[idx_tr]
         Xte, tau_te = X[idx_te], tau[idx_te]
         cf_tr = causal_forest().fit(ytr, ttr, X=Xtr)
@@ -155,7 +164,7 @@ def main():
         return {"mean": float(v.mean()), "se": float(v.std(ddof=1) / np.sqrt(len(v)))}
 
     results = {
-        "config": {"reps": N_REPS, "clip": CLIP, "k_folds": K_FOLDS, "test_size": TEST_SIZE},
+        "config": {"source": source, "reps": n_reps, "clip": CLIP, "k_folds": K_FOLDS},
         "ate_abs_error": {k: ms(v) for k, v in ate_err.items()},
         "ate_abs_error_per_rep": ate_err,
         "true_ate_per_rep": true_ates,
@@ -167,12 +176,12 @@ def main():
     }
     (OUT / "results.json").write_text(json.dumps(results, indent=2))
 
-    lines = ["# IHDP results (10 replications, mean and standard error)", "",
+    lines = [f"# IHDP results ({source}: {n_reps} replications, mean and standard error)", "",
              "## Absolute error of the average treatment effect (all 747 children)", "",
              "| Method | Error | SE | Relative error (mean) | Relative error (max) |", "|---|---|---|---|---|"]
     lines += [f"| {k} | {v['mean']:.3f} | {v['se']:.3f} | {results['ate_rel_error_pct'][k]['mean']:.1f}% | "
               f"{results['ate_rel_error_pct'][k]['max']:.1f}% |" for k, v in results["ate_abs_error"].items()]
-    lines += ["", "## Root PEHE of per-child effects (held-out 30%)", "", "| Method | sqrt PEHE | SE |", "|---|---|---|"]
+    lines += ["", f"## Root PEHE of per-child effects ({'held-out 30%' if source == 'cevae10' else 'published 75-child test split'})", "", "| Method | sqrt PEHE | SE |", "|---|---|---|"]
     lines += [f"| {k} | {v['mean']:.3f} | {v['se']:.3f} |" for k, v in results["sqrt_pehe_test"].items()]
     tc = results["targeting_curve"]
     i20 = int(np.argmin(np.abs(grid - 0.2)))
@@ -199,11 +208,13 @@ def main():
     ax.plot(grid * 100, tc["random"], "--", label="Random targeting")
     ax.set_xlabel("Share of children targeted (%)")
     ax.set_ylabel("Mean true effect in targeted group")
-    ax.set_title("IHDP targeting curve (held-out, 10 reps)")
+    ax.set_title(f"IHDP targeting curve (held-out, {n_reps} reps)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(OUT / "targeting_curve.png", dpi=150)
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--source", choices=list(SOURCES), default="cevae10")
+    main(ap.parse_args().source)
