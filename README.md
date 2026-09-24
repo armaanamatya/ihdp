@@ -89,6 +89,34 @@ Both neural models cut the held-out per-child error well below the best classica
 
 Full numbers: `results/deep_summary.md`, `results/deep_results.json`.
 
+## Serving
+
+`export.py` trains the serving model and exports it to ONNX with the covariate normalization baked into the graph, so the service takes raw features. The export fails unless ONNX Runtime matches PyTorch to within 1e-4 (measured: 2.4e-6).
+
+The service uses DragonNet rather than TARNet. Its propensity head lets the API flag inputs with poor overlap, where any effect estimate is unreliable. TARNet scored slightly better on PEHE, but PEHE needs ground truth that a production system never has, so it is not a selection rule.
+
+`serve/app.py` is a FastAPI service on ONNX Runtime:
+
+| Endpoint | |
+|---|---|
+| `GET /health` | Liveness and model version |
+| `GET /metadata` | Feature order, model hash, parity check |
+| `POST /score` | Up to 50,000 rows of 25 features. Returns the predicted effect, propensity, a treat/don't-treat flag at a chosen threshold, and a low-overlap flag (propensity outside [0.05, 0.95]) |
+
+```
+curl -X POST localhost:8000/score -H "Content-Type: application/json" \
+  -d '{"rows": [[-0.53,-0.34,1.13,0.16,-0.32,1.3,1,0,1,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0]], "threshold": 4.0}'
+```
+
+Tests (`tests/`) cover the endpoints, input validation and ONNX to PyTorch parity.
+
+```
+.venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python export.py                              # writes artifacts/
+.venv/Scripts/python -m uvicorn serve.app:app --port 8000
+.venv/Scripts/python -m pytest -q
+```
+
 ## Setup
 
 ```
